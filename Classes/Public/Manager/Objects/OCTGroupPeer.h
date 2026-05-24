@@ -1,10 +1,10 @@
-#import <Realm/Realm.h>
+#import "OCTObject.h"
 
 @class OCTGroup;
 
 RLM_ARRAY_TYPE(OCTGroupPeer)
 
-@interface OCTGroupPeer : RLMObject
+@interface OCTGroupPeer : OCTObject
 
 @property NSInteger peerNumber;
 @property NSString *publicKey;
