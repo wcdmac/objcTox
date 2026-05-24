@@ -1,4 +1,4 @@
-#import "OCTObject.h"
+#import <objcTox/OCTObject.h>
 
 @class OCTGroup;
 
