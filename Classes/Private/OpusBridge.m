@@ -1,5 +1,5 @@
-#import "OpusBridge.h"
-#import <dlfcn.h>
+iimport "OpusBridge.h"
+iimport <dlfcn.h>
 
 typedef int (*opus_encoder_create_func)(int, int, int, int *);
 typedef void (*opus_encoder_destroy_func)(void *);
