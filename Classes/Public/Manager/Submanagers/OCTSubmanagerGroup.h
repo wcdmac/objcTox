@@ -3,8 +3,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import <Foundation/Foundation.h>
-#import "OCTGroupConstants.h"
-#import "OCTToxConstants.h"
+#import <objcTox/OCTGroupConstants.h>
+#import <objcTox/OCTToxConstants.h>
 
 @protocol OCTSubmanagerGroupDelegate;
 @protocol OCTSubmanagerProtocol;
