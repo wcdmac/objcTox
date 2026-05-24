@@ -17,6 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol OCTSubmanagerFriends;
 @protocol OCTSubmanagerObjects;
 @protocol OCTSubmanagerUser;
+@protocol OCTSubmanagerGroup;
 
 @protocol OCTManager <NSObject>
 
@@ -54,6 +55,11 @@ NS_ASSUME_NONNULL_BEGIN
  * Submanager with all user methods.
  */
 @property (strong, nonatomic, readonly) id<OCTSubmanagerUser> user;
+
+/**
+ * Submanager with all group methods.
+ */
+@property (strong, nonatomic, readonly) id<OCTSubmanagerGroup> group;
 
 /**
  * Configuration used by OCTManager.
