@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
 #import "OCTSubmanagerGroupImpl.h"
+#import "OCTTox+Private.h"
 #import <objcTox/OCTSubmanagerGroupDelegate.h>
 #import <objcTox/OCTGroupConstants.h>
 
@@ -60,17 +61,17 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
 
 @implementation OCTSubmanagerGroupImpl
 
-- (instancetype)initWithToxPointer:(void *)toxPointer {
+- (instancetype)initWithTox:(OCTTox *)tox {
     self = [super init];
     if (self) {
-        _toxPointer = toxPointer;
+        _tox = tox;
         [self registerCallbacks];
     }
     return self;
 }
 
 - (void)registerCallbacks {
-    void *tox = self.toxPointer;
+    Tox *tox = self.tox.tox;
     if (!tox) return;
 
     tox_callback_group_invite_func cbInvite = (tox_callback_group_invite_func)sym("tox_callback_group_invite");
@@ -111,7 +112,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     int err = 0;
     const char *nameC = name ? [name UTF8String] : "";
     uint16_t nameLen = (uint16_t)strlen(nameC);
-    uint32_t result = func(self.toxPointer, (int)privacyState, (const uint8_t *)nameC, nameLen, &err);
+    uint32_t result = func(self.tox.tox, (int)privacyState, (const uint8_t *)nameC, nameLen, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupNew userInfo:nil];
@@ -129,7 +130,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     const char *passC = password ? [password UTF8String] : "";
     uint16_t passLen = (uint16_t)strlen(passC);
 
-    uint32_t result = func(self.toxPointer, [chatId bytes], (const uint8_t *)nameC, nameLen, (const uint8_t *)passC, passLen, &err);
+    uint32_t result = func(self.tox.tox, [chatId bytes], (const uint8_t *)nameC, nameLen, (const uint8_t *)passC, passLen, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupJoin userInfo:nil];
@@ -142,7 +143,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (!func) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteFriend userInfo:nil]; return NO; }
 
     int err = 0;
-    bool result = func(self.toxPointer, (uint32_t)friendNumber, groupNumber, &err);
+    bool result = func(self.tox.tox, (uint32_t)friendNumber, groupNumber, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteFriend userInfo:nil];
@@ -160,7 +161,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     const char *passC = password ? [password UTF8String] : "";
     uint16_t passLen = (uint16_t)strlen(passC);
 
-    uint32_t result = func(self.toxPointer, [inviteData bytes], [inviteData length], (const uint8_t *)nameC, nameLen, (const uint8_t *)passC, passLen, &err);
+    uint32_t result = func(self.tox.tox, [inviteData bytes], [inviteData length], (const uint8_t *)nameC, nameLen, (const uint8_t *)passC, passLen, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
@@ -173,7 +174,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (!func) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendMessage userInfo:nil]; return 0; }
 
     int err = 0;
-    uint32_t result = func(self.toxPointer, groupNumber, (int)type, [message bytes], [message length], &err);
+    uint32_t result = func(self.tox.tox, groupNumber, (int)type, [message bytes], [message length], &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendMessage userInfo:nil];
@@ -186,7 +187,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (!func) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendCustomPacket userInfo:nil]; return NO; }
 
     int err = 0;
-    bool result = func(self.toxPointer, groupNumber, lossless, [packet bytes], [packet length], &err);
+    bool result = func(self.tox.tox, groupNumber, lossless, [packet bytes], [packet length], &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendCustomPacket userInfo:nil];
@@ -201,7 +202,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     int err = 0;
     const char *msgC = message ? [message UTF8String] : "";
     uint16_t msgLen = (uint16_t)strlen(msgC);
-    bool result = func(self.toxPointer, groupNumber, (const uint8_t *)msgC, msgLen, &err);
+    bool result = func(self.tox.tox, groupNumber, (const uint8_t *)msgC, msgLen, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorLeave userInfo:nil];
@@ -216,7 +217,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     int err = 0;
     const char *topicC = topic ? [topic UTF8String] : "";
     uint16_t topicLen = (uint16_t)strlen(topicC);
-    bool result = func(self.toxPointer, groupNumber, (const uint8_t *)topicC, topicLen, &err);
+    bool result = func(self.tox.tox, groupNumber, (const uint8_t *)topicC, topicLen, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetTopic userInfo:nil];
@@ -229,7 +230,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (!func) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorKickPeer userInfo:nil]; return NO; }
 
     int err = 0;
-    bool result = func(self.toxPointer, groupNumber, peerNumber, &err);
+    bool result = func(self.tox.tox, groupNumber, peerNumber, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorKickPeer userInfo:nil];
@@ -242,7 +243,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (!func) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetRole userInfo:nil]; return NO; }
 
     int err = 0;
-    bool result = func(self.toxPointer, groupNumber, peerNumber, (int)role, &err);
+    bool result = func(self.tox.tox, groupNumber, peerNumber, (int)role, &err);
 
     if (err != 0 && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetRole userInfo:nil];
@@ -256,7 +257,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
 
     int err = 0;
     uint8_t chatId[TOX_GROUP_CHAT_ID_SIZE];
-    bool result = func(self.toxPointer, groupNumber, chatId, &err);
+    bool result = func(self.tox.tox, groupNumber, chatId, &err);
 
     if (!result || err != 0) {
         if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGetChatId userInfo:nil];
@@ -269,7 +270,7 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
 - (uint32_t)getGroupNumberGroups {
     tox_group_get_number_groups_func func = (tox_group_get_number_groups_func)sym("tox_group_get_number_groups");
     if (!func) return 0;
-    return func(self.toxPointer);
+    return func(self.tox.tox);
 }
 
 @end
