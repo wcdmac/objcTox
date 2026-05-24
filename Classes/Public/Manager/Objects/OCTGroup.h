@@ -1,5 +1,5 @@
-#import "OCTObject.h"
-#import "OCTGroupPeer.h"
+#import <objcTox/OCTObject.h>
+#import <objcTox/OCTGroupPeer.h>
 
 @interface OCTGroup : OCTObject
 
