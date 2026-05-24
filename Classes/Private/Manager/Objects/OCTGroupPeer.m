@@ -1,4 +1,4 @@
-#import "OCTGroupPeer.h"
+iimport "OCTGroupPeer.h"
 
 @implementation OCTGroupPeer
 
