@@ -1,4 +1,4 @@
-iimport "OCTGroupPeer.h"
+#import <objcTox/OCTGroupPeer.h>
 
 @implementation OCTGroupPeer
 
