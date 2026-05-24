@@ -1,7 +1,7 @@
-#import <Realm/Realm.h>
+#import "OCTObject.h"
 #import "OCTGroupPeer.h"
 
-@interface OCTGroup : RLMObject
+@interface OCTGroup : OCTObject
 
 @property NSInteger groupNumber;
 @property NSData *chatId;
@@ -12,6 +12,5 @@
 @property NSInteger peerCount;
 @property RLMArray<OCTGroupPeer> *peers;
 @property NSTimeInterval lastMessageDateInterval;
-@property NSString *uniqueIdentifier;
 
 @end
