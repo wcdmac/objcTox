@@ -4,9 +4,9 @@
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
-#import "OCTSubmanagerGroup.h"
-#import "OCTSubmanagerGroupDelegate.h"
-#import "OCTGroupConstants.h"
+#import <objcTox/OCTSubmanagerGroup.h>
+#import <objcTox/OCTSubmanagerGroupDelegate.h>
+#import <objcTox/OCTGroupConstants.h>
 
 
 #define TOX_GROUP_CHAT_ID_SIZE 32
