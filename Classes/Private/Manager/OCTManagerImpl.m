@@ -18,6 +18,8 @@
 #import "OCTSubmanagerUserImpl.h"
 #import "OCTRealmManager.h"
 
+@class OCTSubmanagerGroupImpl;
+
 @interface OCTManagerImpl () <OCTToxDelegate, OCTSubmanagerDataSource>
 
 @property (copy, nonatomic, readonly) OCTManagerConfiguration *currentConfiguration;
@@ -37,6 +39,7 @@
 @property (strong, nonatomic, readwrite) OCTSubmanagerFriendsImpl *friends;
 @property (strong, nonatomic, readwrite) OCTSubmanagerObjectsImpl *objects;
 @property (strong, nonatomic, readwrite) OCTSubmanagerUserImpl *user;
+@property (strong, nonatomic, readwrite) OCTSubmanagerGroupImpl *group;
 
 @end
 
@@ -206,6 +209,9 @@
     calls.dataSource = self;
     _calls = calls;
     [_calls setupAndReturnError:nil];
+
+    OCTSubmanagerGroupImpl *group = [[OCTSubmanagerGroupImpl alloc] initWithToxPointer:_tox.tox];
+    _group = group;
 }
 
 - (void)killSubmanagers
@@ -217,6 +223,7 @@
     self.friends = nil;
     self.objects = nil;
     self.user = nil;
+    self.group = nil;
 }
 
 - (id)createSubmanagerWithClass:(Class)class
