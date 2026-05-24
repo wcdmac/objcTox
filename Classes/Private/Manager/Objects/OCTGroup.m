@@ -1,4 +1,4 @@
-#import "OCTGroup.h"
+iimport "OCTGroup.h"
 
 @implementation OCTGroup
 
