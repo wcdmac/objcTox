@@ -4,7 +4,7 @@
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
-#import <objcTox/OCTSubmanagerGroup.h>
+#import "OCTSubmanagerGroupImpl.h"
 #import <objcTox/OCTSubmanagerGroupDelegate.h>
 #import <objcTox/OCTGroupConstants.h>
 
@@ -57,11 +57,6 @@ static void groupJoinRejectedCallback(void *tox, uint32_t group_number, int reje
 static void groupPeerNameCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *name, size_t length, void *user_data);
 
 NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain";
-
-@interface OCTSubmanagerGroupImpl : NSObject <OCTSubmanagerGroup>
-@property (weak, nonatomic) id<OCTSubmanagerGroupDelegate> delegate;
-@property (nonatomic, assign) void *toxPointer;
-@end
 
 @implementation OCTSubmanagerGroupImpl
 
