@@ -7,6 +7,8 @@
 
 @interface OCTSubmanagerGroupImpl : NSObject <OCTSubmanagerGroup>
 
+@property (nonatomic, assign) void *toxPointer;
+
 - (instancetype)initWithToxPointer:(void *)toxPointer;
 
 - (instancetype)init NS_UNAVAILABLE;
