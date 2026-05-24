@@ -7,8 +7,7 @@
 #import "OCTSubmanagerGroup.h"
 #import "OCTSubmanagerGroupDelegate.h"
 #import "OCTGroupConstants.h"
-#import "OCTGroup.h"
-#import "OCTGroupPeer.h"
+
 
 #define TOX_GROUP_CHAT_ID_SIZE 32
 
