@@ -210,8 +210,8 @@
     _calls = calls;
     [_calls setupAndReturnError:nil];
 
-    OCTSubmanagerGroupImpl *groupImpl = [[OCTSubmanagerGroupImpl alloc] initWithToxPointer:_tox.toxPointer];
-    _group = group;
+    OCTSubmanagerGroupImpl *groupImpl = [[OCTSubmanagerGroupImpl alloc] initWithTox:_tox];
+    _group = groupImpl;
 }
 
 - (void)killSubmanagers
