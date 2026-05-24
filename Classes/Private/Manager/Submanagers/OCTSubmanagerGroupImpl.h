@@ -5,11 +5,13 @@
 #import <Foundation/Foundation.h>
 #import <objcTox/OCTSubmanagerGroup.h>
 
+@class OCTTox;
+
 @interface OCTSubmanagerGroupImpl : NSObject <OCTSubmanagerGroup>
 
-@property (nonatomic, assign) void *toxPointer;
+@property (strong, nonatomic) OCTTox *tox;
 
-- (instancetype)initWithToxPointer:(void *)toxPointer;
+- (instancetype)initWithTox:(OCTTox *)tox;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
