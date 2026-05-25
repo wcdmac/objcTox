@@ -99,10 +99,6 @@
             return [OCTCall class];
         case OCTFetchRequestTypeMessageAbstract:
             return [OCTMessageAbstract class];
-        case OCTFetchRequestTypeGroup:
-            return [OCTGroup class];
-        case OCTFetchRequestTypeGroupPeer:
-            return [OCTGroupPeer class];
     }
 }
 
