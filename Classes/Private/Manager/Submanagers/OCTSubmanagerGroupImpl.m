@@ -25,25 +25,15 @@ typedef bool (*tox_group_set_role_func)(void *, uint32_t, uint32_t, int, int *);
 typedef bool (*tox_group_get_chat_id_func)(void *, uint32_t, uint8_t *, int *);
 typedef uint32_t (*tox_group_get_number_groups_func)(const void *);
 
-// Safe callback registration
 typedef void (*tox_callback_group_invite_func)(void *, void (*)(void *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_message_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, uint32_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_private_message_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_custom_packet_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_peer_join_func)(void *, void (*)(void *, uint32_t, uint32_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_peer_exit_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_topic_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_self_join_func)(void *, void (*)(void *, uint32_t, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_join_reject_func)(void *, void (*)(void *, uint32_t, int, void *), void *);
-// Safe callback registration
 typedef void (*tox_callback_group_peer_name_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
 
 static void *libHandle = NULL;
@@ -69,14 +59,18 @@ static void groupPeerNameCallback(void *tox, uint32_t group_number, uint32_t pee
 
 NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain";
 
+@interface OCTSubmanagerGroupImpl ()
+@property (weak, nonatomic) OCTTox *tox;
+@end
+
 @implementation OCTSubmanagerGroupImpl
 
 - (instancetype)initWithTox:(OCTTox *)tox {
     self = [super init];
     if (self) {
-        _toxPointer = tox.tox;
-        if (_toxPointer == NULL) {
-            NSLog(@"OCTSubmanagerGroupImpl: toxPointer is NULL, group features disabled");
+        _tox = tox;
+        if (_tox == nil || _tox.tox == NULL) {
+            NSLog(@"OCTSubmanagerGroupImpl: tox is nil or tox.tox is NULL, group features disabled");
             return self;
         }
         @try {
@@ -88,11 +82,9 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     }
     return self;
 }
-    return self;
-}
 
 - (void)registerCallbacks {
-    Tox *tox = self.tox.tox;
+    void *tox = self.tox.tox;
     if (!tox) return;
 
     tox_callback_group_invite_func cbInvite = (tox_callback_group_invite_func)sym("tox_callback_group_invite");
