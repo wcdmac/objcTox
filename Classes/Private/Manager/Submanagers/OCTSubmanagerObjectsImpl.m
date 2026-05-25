@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import "OCTSubmanagerObjectsImpl.h"
+
 #import "OCTRealmManager.h"
 #import "OCTFriend.h"
 #import "OCTFriendRequest.h"
@@ -14,6 +15,7 @@
 #import <objcTox/OCTGroupPeer.h>
 
 @implementation OCTSubmanagerObjectsImpl
+
 @synthesize dataSource = _dataSource;
 
 #pragma mark -  Public
@@ -21,7 +23,6 @@
 - (void)setGenericSettingsData:(NSData *)data
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-
     [manager updateObject:manager.settingsStorage withBlock:^(OCTSettingsStorageObject *object) {
         object.genericSettingsData = data;
     }];
@@ -50,7 +51,6 @@
 - (void)changeFriend:(OCTFriend *)friend nickname:(NSString *)nickname
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-
     [manager updateObject:friend withBlock:^(OCTFriend *theFriend) {
         if (nickname.length) {
             theFriend.nickname = nickname;
@@ -69,7 +69,6 @@
 - (void)changeChat:(OCTChat *)chat enteredText:(NSString *)enteredText
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-
     [manager updateObject:chat withBlock:^(OCTChat *theChat) {
         theChat.enteredText = enteredText;
     }];
@@ -78,9 +77,38 @@
 - (void)changeChat:(OCTChat *)chat lastReadDateInterval:(NSTimeInterval)lastReadDateInterval
 {
     OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-
     [manager updateObject:chat withBlock:^(OCTChat *theChat) {
         theChat.lastReadDateInterval = lastReadDateInterval;
+    }];
+}
+
+#pragma mark -  Groups
+
+- (RLMResults *)groupsWithPredicate:(NSPredicate *)predicate
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    return [manager objectsWithClass:[OCTGroup class] predicate:predicate];
+}
+
+- (RLMResults *)groupPeersWithPredicate:(NSPredicate *)predicate
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    return [manager objectsWithClass:[OCTGroupPeer class] predicate:predicate];
+}
+
+- (void)changeGroup:(OCTGroup *)group topic:(NSString *)topic
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    [manager updateObject:group withBlock:^(OCTGroup *theGroup) {
+        theGroup.topic = topic;
+    }];
+}
+
+- (void)changeGroup:(OCTGroup *)group name:(NSString *)name
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    [manager updateObject:group withBlock:^(OCTGroup *theGroup) {
+        theGroup.name = name;
     }];
 }
 
@@ -100,21 +128,6 @@
         case OCTFetchRequestTypeMessageAbstract:
             return [OCTMessageAbstract class];
     }
-}
-
-
-#pragma mark -  Groups
-
-- (RLMResults *)groupsWithPredicate:(NSPredicate *)predicate
-{
-    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-    return [manager objectsWithClass:[OCTGroup class] predicate:predicate];
-}
-
-- (RLMResults *)groupPeersWithPredicate:(NSPredicate *)predicate
-{
-    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
-    return [manager objectsWithClass:[OCTGroupPeer class] predicate:predicate];
 }
 
 @end
