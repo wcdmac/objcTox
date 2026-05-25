@@ -10,6 +10,8 @@
 #import "OCTCall.h"
 #import "OCTMessageAbstract.h"
 #import "OCTSettingsStorageObject.h"
+#import <objcTox/OCTGroup.h>
+#import <objcTox/OCTGroupPeer.h>
 
 @implementation OCTSubmanagerObjectsImpl
 @synthesize dataSource = _dataSource;
@@ -97,6 +99,10 @@
             return [OCTCall class];
         case OCTFetchRequestTypeMessageAbstract:
             return [OCTMessageAbstract class];
+        case OCTFetchRequestTypeGroup:
+            return [OCTGroup class];
+        case OCTFetchRequestTypeGroupPeer:
+            return [OCTGroupPeer class];
     }
 }
 
