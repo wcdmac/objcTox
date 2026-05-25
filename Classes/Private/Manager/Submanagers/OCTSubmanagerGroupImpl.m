@@ -25,15 +25,25 @@ typedef bool (*tox_group_set_role_func)(void *, uint32_t, uint32_t, int, int *);
 typedef bool (*tox_group_get_chat_id_func)(void *, uint32_t, uint8_t *, int *);
 typedef uint32_t (*tox_group_get_number_groups_func)(const void *);
 
+// Safe callback registration
 typedef void (*tox_callback_group_invite_func)(void *, void (*)(void *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_message_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, uint32_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_private_message_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_custom_packet_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_peer_join_func)(void *, void (*)(void *, uint32_t, uint32_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_peer_exit_func)(void *, void (*)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_topic_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_self_join_func)(void *, void (*)(void *, uint32_t, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_join_reject_func)(void *, void (*)(void *, uint32_t, int, void *), void *);
+// Safe callback registration
 typedef void (*tox_callback_group_peer_name_func)(void *, void (*)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *);
 
 static void *libHandle = NULL;
@@ -64,9 +74,20 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
 - (instancetype)initWithTox:(OCTTox *)tox {
     self = [super init];
     if (self) {
-        _tox = tox;
-        [self registerCallbacks];
+        _toxPointer = tox.tox;
+        if (_toxPointer == NULL) {
+            NSLog(@"OCTSubmanagerGroupImpl: toxPointer is NULL, group features disabled");
+            return self;
+        }
+        @try {
+            [self registerCallbacks];
+        }
+        @catch (NSException *exception) {
+            NSLog(@"OCTSubmanagerGroupImpl: registerCallbacks failed: %@ - %@", exception.name, exception.reason);
+        }
     }
+    return self;
+}
     return self;
 }
 
