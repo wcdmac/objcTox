@@ -106,4 +106,19 @@
     }
 }
 
+
+#pragma mark -  Groups
+
+- (RLMResults *)groupsWithPredicate:(NSPredicate *)predicate
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    return [manager objectsWithClass:[OCTGroup class] predicate:predicate];
+}
+
+- (RLMResults *)groupPeersWithPredicate:(NSPredicate *)predicate
+{
+    OCTRealmManager *manager = [self.dataSource managerGetRealmManager];
+    return [manager objectsWithClass:[OCTGroupPeer class] predicate:predicate];
+}
+
 @end
