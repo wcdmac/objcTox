@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 /**
  * Submanager with all group methods.
  */
-@property (strong, nonatomic, readonly) id<OCTSubmanagerGroup> group;
+@property (strong, nonatomic, readonly, nullable) id<OCTSubmanagerGroup> group;
 
 /**
  * Configuration used by OCTManager.
