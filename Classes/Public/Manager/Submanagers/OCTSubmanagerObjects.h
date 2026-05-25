@@ -9,6 +9,7 @@
 @class OCTObject;
 @class OCTFriend;
 @class OCTChat;
+@class OCTGroup;
 @class RLMResults;
 
 @protocol OCTSubmanagerObjects <NSObject>
@@ -69,10 +70,40 @@
  */
 - (void)changeChat:(OCTChat *)chat lastReadDateInterval:(NSTimeInterval)lastReadDateInterval;
 
-
 #pragma mark -  Groups
 
+/**
+ * Returns all groups matching predicate.
+ *
+ * @param predicate Predicate for filtering groups.
+ *
+ * @return RLMResults with OCTGroup objects.
+ */
 - (RLMResults *)groupsWithPredicate:(NSPredicate *)predicate;
+
+/**
+ * Returns all group peers matching predicate.
+ *
+ * @param predicate Predicate for filtering group peers.
+ *
+ * @return RLMResults with OCTGroupPeer objects.
+ */
 - (RLMResults *)groupPeersWithPredicate:(NSPredicate *)predicate;
+
+/**
+ * Sets topic property for group.
+ *
+ * @param group Group to change.
+ * @param topic New topic.
+ */
+- (void)changeGroup:(OCTGroup *)group topic:(NSString *)topic;
+
+/**
+ * Sets name property for group.
+ *
+ * @param group Group to change.
+ * @param name New name.
+ */
+- (void)changeGroup:(OCTGroup *)group name:(NSString *)name;
 
 @end
