@@ -9,7 +9,7 @@
 
 @interface OCTSubmanagerGroupImpl : NSObject <OCTSubmanagerGroup>
 
-@property (strong, nonatomic) OCTTox *tox;
+@property (weak, nonatomic) OCTTox *tox;
 
 - (instancetype)initWithTox:(OCTTox *)tox;
 
