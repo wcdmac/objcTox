@@ -9,8 +9,6 @@
 
 @interface OCTSubmanagerGroupImpl : NSObject <OCTSubmanagerGroup>
 
-@property (weak, nonatomic) OCTTox *tox;
-
 - (instancetype)initWithTox:(OCTTox *)tox;
 
 - (instancetype)init NS_UNAVAILABLE;
