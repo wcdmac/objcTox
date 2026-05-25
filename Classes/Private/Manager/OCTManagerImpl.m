@@ -5,10 +5,12 @@
 #import <objc/runtime.h>
 
 #import "OCTManagerImpl.h"
+
 #import "OCTTox.h"
 #import "OCTToxEncryptSave.h"
 #import "OCTManagerConfiguration.h"
 #import "OCTManagerFactory.h"
+
 #import "OCTSubmanagerBootstrapImpl.h"
 #import "OCTSubmanagerCallsImpl.h"
 #import "OCTSubmanagerChatsImpl.h"
@@ -17,18 +19,14 @@
 #import "OCTSubmanagerObjectsImpl.h"
 #import "OCTSubmanagerUserImpl.h"
 #import "OCTRealmManager.h"
-
 #import "OCTSubmanagerGroupImpl.h"
 
 @interface OCTManagerImpl () <OCTToxDelegate, OCTSubmanagerDataSource>
 
 @property (copy, nonatomic, readonly) OCTManagerConfiguration *currentConfiguration;
-
 @property (strong, nonatomic, readonly) OCTTox *tox;
 @property (strong, nonatomic, readonly) NSObject *toxSaveFileLock;
-
 @property (strong, nonatomic, nonnull) OCTToxEncryptSave *encryptSave;
-
 @property (strong, nonatomic, readonly) OCTRealmManager *realmManager;
 @property (strong, atomic) NSNotificationCenter *notificationCenter;
 
@@ -39,7 +37,7 @@
 @property (strong, nonatomic, readwrite) OCTSubmanagerFriendsImpl *friends;
 @property (strong, nonatomic, readwrite) OCTSubmanagerObjectsImpl *objects;
 @property (strong, nonatomic, readwrite) OCTSubmanagerUserImpl *user;
-@property (strong, nonatomic, readwrite) id<OCTSubmanagerGroup> group;
+@property (strong, nonatomic, readwrite, nullable) id<OCTSubmanagerGroup> group;
 
 @end
 
@@ -59,19 +57,15 @@
     }
 
     _currentConfiguration = [configuration copy];
-
     _tox = tox;
     _tox.delegate = self;
     _toxSaveFileLock = [NSObject new];
-
     _encryptSave = toxEncryptSave;
-
     _realmManager = realmManager;
     _notificationCenter = [[NSNotificationCenter alloc] init];
 
     [_tox start];
     [self saveTox];
-
     [self createSubmanagers];
 
     return self;
@@ -114,6 +108,7 @@
 - (BOOL)changeEncryptPassword:(nonnull NSString *)newPassword oldPassword:(nonnull NSString *)oldPassword
 {
     OCTToxEncryptSave *encryptSave = [self changeToxPassword:newPassword oldPassword:oldPassword];
+
     if (encryptSave == nil) {
         return NO;
     }
@@ -131,7 +126,6 @@
 - (BOOL)isManagerEncryptedWithPassword:(nonnull NSString *)password
 {
     NSString *toxFilePath = self.currentConfiguration.fileStorage.pathForToxSaveFile;
-
     return [self isDataAtPath:toxFilePath encryptedWithPassword:password];
 }
 
@@ -210,8 +204,16 @@
     _calls = calls;
     [_calls setupAndReturnError:nil];
 
-    OCTSubmanagerGroupImpl *groupImpl = [[OCTSubmanagerGroupImpl alloc] initWithTox:_tox];
-    _group = groupImpl;
+    @try {
+        OCTSubmanagerGroupImpl *groupImpl = [[OCTSubmanagerGroupImpl alloc] initWithTox:_tox];
+        groupImpl.dataSource = self;
+        _group = groupImpl;
+        NSLog(@"OCTSubmanagerGroupImpl initialized successfully");
+    }
+    @catch (NSException *exception) {
+        NSLog(@"OCTSubmanagerGroupImpl init failed: %@ - %@", exception.name, exception.reason);
+        _group = nil;
+    }
 }
 
 - (void)killSubmanagers
@@ -254,7 +256,6 @@
     struct objc_method_description description = protocol_getMethodDescription(@protocol(OCTToxDelegate), aSelector, NO, YES);
 
     if (description.name == NULL) {
-        // We forward methods only from OCTToxDelegate protocol.
         return nil;
     }
 
@@ -290,9 +291,7 @@
         };
 
         NSData *data = [self.tox save];
-
         NSError *error;
-
         data = [self.encryptSave encryptData:data error:&error];
 
         if (! data) {
@@ -305,7 +304,6 @@
     }
 }
 
-// On success returns encryptSave with new password.
 - (OCTToxEncryptSave *)changeToxPassword:(NSString *)newPassword oldPassword:(NSString *)oldPassword
 {
     NSString *toxFilePath = self.currentConfiguration.fileStorage.pathForToxSaveFile;
@@ -315,9 +313,7 @@
     }
 
     __block OCTToxEncryptSave *newEncryptSave;
-
     @synchronized(self.toxSaveFileLock) {
-        // Passing nil as tox data as we are setting new password.
         newEncryptSave = [[OCTToxEncryptSave alloc] initWithPassphrase:newPassword toxData:nil error:nil];
     }
 
