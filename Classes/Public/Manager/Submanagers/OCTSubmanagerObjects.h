@@ -69,4 +69,10 @@
  */
 - (void)changeChat:(OCTChat *)chat lastReadDateInterval:(NSTimeInterval)lastReadDateInterval;
 
+
+#pragma mark -  Groups
+
+- (RLMResults *)groupsWithPredicate:(NSPredicate *)predicate;
+- (RLMResults *)groupPeersWithPredicate:(NSPredicate *)predicate;
+
 @end
