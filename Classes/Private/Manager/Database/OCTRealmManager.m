@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #import <Realm/Realm.h>
-
 #import "OCTRealmManager.h"
 #import "OCTFriend.h"
 #import "OCTFriendRequest.h"
@@ -15,8 +14,10 @@
 #import "OCTMessageCall.h"
 #import "OCTSettingsStorageObject.h"
 #import "OCTLogging.h"
+#import <objcTox/OCTGroup.h>
+#import <objcTox/OCTGroupPeer.h>
 
-static const uint64_t kCurrentSchemeVersion = 7;
+static const uint64_t kCurrentSchemeVersion = 8;
 static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrimaryKey";
 
 @interface OCTRealmManager ()
@@ -27,6 +28,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 @end
 
 @implementation OCTRealmManager
+
 @synthesize settingsStorage = _settingsStorage;
 
 #pragma mark -  Class methods
@@ -41,7 +43,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         RLMRealm *old = [OCTRealmManager createRealmWithFileURL:[NSURL fileURLWithPath:databasePath]
                                                   encryptionKey:nil
                                                           error:error];
-
         if (! old) {
             return NO;
         }
@@ -81,7 +82,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     __weak OCTRealmManager *weakSelf = self;
     dispatch_sync(_queue, ^{
         __strong OCTRealmManager *strongSelf = weakSelf;
-
         // TODO handle error
         self->_realm = [OCTRealmManager createRealmWithFileURL:fileURL encryptionKey:encryptionKey error:nil];
         [strongSelf createSettingsStorage];
@@ -137,9 +137,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     dispatch_sync(self.queue, ^{
         [self.realm beginWriteTransaction];
-
         updateBlock(object);
-
         [self.realm commitWriteTransaction];
     });
 }
@@ -172,9 +170,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     dispatch_sync(self.queue, ^{
         [self.realm beginWriteTransaction];
-
         [self.realm addObject:object];
-
         [self.realm commitWriteTransaction];
     });
 }
@@ -187,9 +183,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 
     dispatch_sync(self.queue, ^{
         [self.realm beginWriteTransaction];
-
         [self.realm deleteObject:object];
-
         [self.realm commitWriteTransaction];
     });
 }
@@ -232,6 +226,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 - (OCTFriend *)friendWithPublicKey:(NSString *)publicKey
 {
     NSAssert(publicKey, @"Public key should be non-empty.");
+
     __block OCTFriend *friend;
 
     dispatch_sync(self.queue, ^{
@@ -260,10 +255,8 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         chat.lastActivityDateInterval = [[NSDate date] timeIntervalSince1970];
 
         [self.realm beginWriteTransaction];
-
         [self.realm addObject:chat];
         [chat.friends addObject:friend];
-
         [self.realm commitWriteTransaction];
     });
 
@@ -275,7 +268,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     __block OCTCall *call = nil;
 
     dispatch_sync(self.queue, ^{
-
         call = [[OCTCall objectsInRealm:self.realm where:@"chat == %@", chat] firstObject];
 
         if (call) {
@@ -301,7 +293,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     __block OCTCall *call = nil;
 
     dispatch_sync(self.queue, ^{
-
         call = [[OCTCall objectsInRealm:self.realm where:@"chat == %@", chat] firstObject];
     });
 
@@ -318,6 +309,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         [self.realm beginWriteTransaction];
 
         NSMutableSet *changedChats = [NSMutableSet new];
+
         for (OCTMessageAbstract *message in messages) {
             [changedChats addObject:message.chatUniqueIdentifier];
         }
@@ -346,8 +338,8 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
         RLMResults *messages = [OCTMessageAbstract objectsInRealm:self.realm where:@"chatUniqueIdentifier == %@", chat.uniqueIdentifier];
 
         [self.realm beginWriteTransaction];
-
         [self removeMessagesWithSubmessages:messages];
+
         if (removeChat) {
             [self.realm deleteObject:chat];
         }
@@ -359,7 +351,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
 - (void)convertAllCallsToMessages
 {
     RLMResults *calls = [OCTCall allObjectsInRealm:self.realm];
-
     OCTLogInfo(@"removing %lu calls", (unsigned long)calls.count);
 
     for (OCTCall *call in calls) {
@@ -378,7 +369,6 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
                                  messageId:(OCTToxMessageId)messageId
 {
     NSParameterAssert(text);
-
     OCTLogInfo(@"adding messageText to chat %@", chat);
 
     OCTMessageText *messageText = [OCTMessageText new];
@@ -417,6 +407,7 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     OCTLogInfo(@"adding messageCall to call %@", call);
 
     OCTMessageCallEvent event;
+
     switch (call.status) {
         case OCTCallStatusDialing:
         case OCTCallStatusRinging:
@@ -442,31 +433,28 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
                if (oldSchemaVersion < 1) {
                    // objcTox version 0.1.0
                }
-
                if (oldSchemaVersion < 2) {
                    // objcTox version 0.2.1
                }
-
                if (oldSchemaVersion < 3) {
                    // objcTox version 0.4.0
                }
-
                if (oldSchemaVersion < 4) {
                    // objcTox version 0.5.0
                    [self doMigrationVersion4:migration];
                }
-
                if (oldSchemaVersion < 5) {
                    // OCTMessageAbstract: chat property replaced with chatUniqueIdentifier
                    [self doMigrationVersion5:migration];
                }
-
                if (oldSchemaVersion < 6) {
                    // OCTSettingsStorageObject: adding genericSettingsData property.
                }
-
                if (oldSchemaVersion < 7) {
                    [self doMigrationVersion7:migration];
+               }
+               if (oldSchemaVersion < 8) {
+                   // Adding OCTGroup and OCTGroupPeer models for group chat support.
                }
     };
 }
@@ -513,15 +501,13 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     // This fired resending all messages that were in history for all friends.
     //
     // To fix an issue and stop people suffering we mark all outgoing text messages as delivered.
-
     [migration enumerateObjects:OCTMessageAbstract.className block:^(RLMObject *oldObject, RLMObject *newObject) {
         if (newObject[@"senderUniqueIdentifier"] != nil) {
             return;
         }
 
         RLMObject *messageText = newObject[@"messageText"];
-
-        if (! messageText) {
+        if (messageText == nil) {
             return;
         }
 
@@ -529,55 +515,62 @@ static NSString *kSettingsStorageObjectPrimaryKey = @"kSettingsStorageObjectPrim
     }];
 }
 
-/**
- * Only one of messageText, messageFile or messageCall can be non-nil.
- */
+#pragma mark -  Private methods for adding messages
+
 - (OCTMessageAbstract *)addMessageAbstractWithChat:(OCTChat *)chat
                                             sender:(OCTFriend *)sender
-                                       messageText:(OCTMessageText *)messageText
-                                       messageFile:(OCTMessageFile *)messageFile
-                                       messageCall:(OCTMessageCall *)messageCall
+                                        messageText:(OCTMessageText *)messageText
+                                        messageFile:(OCTMessageFile *)messageFile
+                                        messageCall:(OCTMessageCall *)messageCall
 {
     NSParameterAssert(chat);
 
-    NSAssert( (messageText && ! messageFile && ! messageCall) ||
-              (! messageText && messageFile && ! messageCall) ||
-              (! messageText && ! messageFile && messageCall),
-              @"Wrong options passed. Only one of messageText, messageFile or messageCall should be non-nil.");
+    OCTLogInfo(@"adding messageAbstract to chat %@", chat);
 
     OCTMessageAbstract *messageAbstract = [OCTMessageAbstract new];
-    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
-    messageAbstract.senderUniqueIdentifier = sender.uniqueIdentifier;
+
+    if (sender) {
+        messageAbstract.senderUniqueIdentifier = sender.uniqueIdentifier;
+    }
+
     messageAbstract.chatUniqueIdentifier = chat.uniqueIdentifier;
+    messageAbstract.dateInterval = [[NSDate date] timeIntervalSince1970];
     messageAbstract.messageText = messageText;
     messageAbstract.messageFile = messageFile;
     messageAbstract.messageCall = messageCall;
 
-    [self addObject:messageAbstract];
-
-    [self updateObject:chat withBlock:^(OCTChat *theChat) {
-        theChat.lastMessage = messageAbstract;
-        theChat.lastActivityDateInterval = messageAbstract.dateInterval;
-    }];
+    dispatch_sync(self.queue, ^{
+        [self.realm beginWriteTransaction];
+        [self.realm addObject:messageAbstract];
+        chat.lastMessage = messageAbstract;
+        chat.lastActivityDateInterval = messageAbstract.dateInterval;
+        [self.realm commitWriteTransaction];
+    });
 
     return messageAbstract;
 }
 
-// Delete an NSArray, RLMArray, or RLMResults of messages from this Realm.
-- (void)removeMessagesWithSubmessages:(id)messages
+- (void)removeMessagesWithSubmessages:(NSArray<OCTMessageAbstract *> *)messages
 {
+    NSMutableArray *textMessages = [NSMutableArray new];
+    NSMutableArray *fileMessages = [NSMutableArray new];
+    NSMutableArray *callMessages = [NSMutableArray new];
+
     for (OCTMessageAbstract *message in messages) {
         if (message.messageText) {
-            [self.realm deleteObject:message.messageText];
+            [textMessages addObject:message.messageText];
         }
         if (message.messageFile) {
-            [self.realm deleteObject:message.messageFile];
+            [fileMessages addObject:message.messageFile];
         }
         if (message.messageCall) {
-            [self.realm deleteObject:message.messageCall];
+            [callMessages addObject:message.messageCall];
         }
     }
 
+    [self.realm deleteObjects:textMessages];
+    [self.realm deleteObjects:fileMessages];
+    [self.realm deleteObjects:callMessages];
     [self.realm deleteObjects:messages];
 }
 
