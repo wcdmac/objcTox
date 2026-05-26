@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.requires_arc = true
   s.source_files = 'Classes/**/*.{m,h}'
   s.public_header_files = 'Classes/Public/**/*.h'
-  s.dependency 'toxcore', :git => 'https://github.com/wcdmac/toxcore.git', :tag => '0.2.20'
+  s.dependency 'toxcore'
   s.dependency 'TPCircularBuffer', '~> 0.0.1'
   s.dependency 'CocoaLumberjack', '1.9.2'
   s.dependency 'Realm', '3.1.0'
