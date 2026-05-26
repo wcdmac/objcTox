@@ -6,9 +6,12 @@
 
 NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain";
 
+static OCTSubmanagerGroupImpl *sSharedManager = nil;
+
 @interface OCTSubmanagerGroupImpl ()
 
 @property (nonatomic, weak, readwrite) OCTTox *tox;
+@property (nonatomic, strong) NSMutableDictionary *inviteFriendNumbers;
 
 @end
 
@@ -21,6 +24,8 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
     if (self) {
         _tox = tox;
         _delegate = delegate;
+        _inviteFriendNumbers = [NSMutableDictionary dictionary];
+        sSharedManager = self;
         [self setupCallbacks];
     }
     return self;
@@ -140,19 +145,31 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
         return UINT32_MAX;
     }
 
+    NSString *inviteKey = [self keyForInviteData:inviteData];
+    NSNumber *friendNumberObj = self.inviteFriendNumbers[inviteKey];
+    if (!friendNumberObj) {
+        NSLog(@"OCTSubmanagerGroupImpl: acceptInvite - no friend number found for invite data");
+        if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
+        return UINT32_MAX;
+    }
+
+    OCTFriendNumber friendNumber = [friendNumberObj unsignedIntValue];
+
     Tox_Err_Group_Invite_Accept err = TOX_ERR_GROUP_INVITE_ACCEPT_OK;
     const char *nameC = name ? [name UTF8String] : "";
     size_t nameLen = strlen(nameC);
     const char *pwC = password ? [password UTF8String] : NULL;
     size_t pwLen = pwC ? strlen(pwC) : 0;
 
-    Tox_Group_Number result = tox_group_invite_accept(tox, 0,
+    Tox_Group_Number result = tox_group_invite_accept(tox, friendNumber,
         (const uint8_t *)inviteData.bytes, inviteData.length,
         (const uint8_t *)nameC, nameLen,
         (const uint8_t *)pwC, pwLen,
         &err);
 
-    NSLog(@"OCTSubmanagerGroupImpl: acceptInviteWithData result=%u err=%d", result, err);
+    NSLog(@"OCTSubmanagerGroupImpl: acceptInviteWithData result=%u err=%d friendNumber=%u", result, err, friendNumber);
+
+    [self.inviteFriendNumbers removeObjectForKey:inviteKey];
 
     if (err != TOX_ERR_GROUP_INVITE_ACCEPT_OK && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
@@ -330,70 +347,77 @@ NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain"
 - (void)configureWithTox:(OCTTox *)tox delegate:(id)delegate {
     _tox = tox;
     _delegate = delegate;
+    sSharedManager = self;
     [self setupCallbacks];
 }
 
-#pragma mark - Callbacks
+#pragma mark - Private
 
-static OCTSubmanagerGroupImpl *managerForTox(Tox *tox) {
-    return nil;
+- (NSString *)keyForInviteData:(NSData *)data {
+    NSUInteger len = data.length;
+    const unsigned char *bytes = data.bytes;
+    NSMutableString *hex = [NSMutableString stringWithCapacity:len * 2];
+    for (NSUInteger i = 0; i < len; i++) {
+        [hex appendFormat:@"%02x", bytes[i]];
+    }
+    return hex;
 }
+
+#pragma mark - Callbacks
 
 static void groupInviteCallback(Tox *tox, Tox_Friend_Number friendNumber,
     const uint8_t *inviteData, size_t inviteDataLength,
     const uint8_t *groupName, size_t groupNameLength,
     void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSData *inviteDataNS = [NSData dataWithBytes:inviteData length:inviteDataLength];
     NSString *groupNameNS = [[NSString alloc] initWithBytes:groupName length:groupNameLength encoding:NSUTF8StringEncoding];
 
-    [manager.delegate groupSubmanager:manager inviteReceived:inviteDataNS fromFriend:friendNumber groupName:groupNameNS];
+    NSString *inviteKey = [sSharedManager keyForInviteData:inviteDataNS];
+    sSharedManager.inviteFriendNumbers[inviteKey] = @(friendNumber);
+
+    [sSharedManager.delegate groupSubmanager:sSharedManager inviteReceived:inviteDataNS fromFriend:friendNumber groupName:groupNameNS];
 }
 
 static void groupMessageCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, Tox_Message_Type type,
     const uint8_t *message, size_t length,
     Tox_Group_Message_Id messageId, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSData *messageData = [NSData dataWithBytes:message length:length];
     OCTToxMessageType msgType = (type == TOX_MESSAGE_TYPE_ACTION) ? OCTToxMessageTypeAction : OCTToxMessageTypeNormal;
 
-    [manager.delegate groupSubmanager:manager messageReceived:messageData fromPeer:peerId inGroup:groupNumber type:msgType messageId:messageId];
+    [sSharedManager.delegate groupSubmanager:sSharedManager messageReceived:messageData fromPeer:peerId inGroup:groupNumber type:msgType messageId:messageId];
 }
 
 static void groupPrivateMessageCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, Tox_Message_Type type,
     const uint8_t *message, size_t length,
     Tox_Group_Message_Id messageId, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSData *messageData = [NSData dataWithBytes:message length:length];
     OCTToxMessageType msgType = (type == TOX_MESSAGE_TYPE_ACTION) ? OCTToxMessageTypeAction : OCTToxMessageTypeNormal;
 
-    [manager.delegate groupSubmanager:manager privateMessageReceived:messageData fromPeer:peerId inGroup:groupNumber type:msgType];
+    [sSharedManager.delegate groupSubmanager:sSharedManager privateMessageReceived:messageData fromPeer:peerId inGroup:groupNumber type:msgType];
 }
 
 static void groupPeerNameCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, const uint8_t *name,
     size_t nameLength, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSString *nameNS = [[NSString alloc] initWithBytes:name length:nameLength encoding:NSUTF8StringEncoding];
-    [manager.delegate groupSubmanager:manager peerNameChanged:peerId inGroup:groupNumber newName:nameNS];
+    [sSharedManager.delegate groupSubmanager:sSharedManager peerNameChanged:peerId inGroup:groupNumber newName:nameNS];
 }
 
 static void groupPeerJoinCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
-    [manager.delegate groupSubmanager:manager peerJoined:peerId inGroup:groupNumber];
+    [sSharedManager.delegate groupSubmanager:sSharedManager peerJoined:peerId inGroup:groupNumber];
 }
 
 static void groupPeerExitCallback(Tox *tox, Tox_Group_Number groupNumber,
@@ -401,8 +425,7 @@ static void groupPeerExitCallback(Tox *tox, Tox_Group_Number groupNumber,
     const uint8_t *name, size_t nameLength,
     const uint8_t *partMessage, size_t partMessageLength,
     void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSString *nameNS = name ? [[NSString alloc] initWithBytes:name length:nameLength encoding:NSUTF8StringEncoding] : nil;
     NSString *partMsg = partMessage ? [[NSString alloc] initWithBytes:partMessage length:partMessageLength encoding:NSUTF8StringEncoding] : nil;
@@ -416,30 +439,27 @@ static void groupPeerExitCallback(Tox *tox, Tox_Group_Number groupNumber,
         default: octExitType = OCTGroupExitTypeQuit; break;
     }
 
-    [manager.delegate groupSubmanager:manager peerLeft:peerId inGroup:groupNumber exitType:octExitType name:nameNS partMessage:partMsg];
+    [sSharedManager.delegate groupSubmanager:sSharedManager peerLeft:peerId inGroup:groupNumber exitType:octExitType name:nameNS partMessage:partMsg];
 }
 
 static void groupTopicCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, const uint8_t *topic,
     size_t topicLength, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSString *topicNS = [[NSString alloc] initWithBytes:topic length:topicLength encoding:NSUTF8StringEncoding];
-    [manager.delegate groupSubmanager:manager topicChanged:topicNS inGroup:groupNumber byPeer:peerId];
+    [sSharedManager.delegate groupSubmanager:sSharedManager topicChanged:topicNS inGroup:groupNumber byPeer:peerId];
 }
 
 static void groupSelfJoinCallback(Tox *tox, Tox_Group_Number groupNumber, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
-    [manager.delegate groupSubmanager:manager selfJoinedGroup:groupNumber];
+    [sSharedManager.delegate groupSubmanager:sSharedManager selfJoinedGroup:groupNumber];
 }
 
 static void groupJoinFailCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Join_Fail failType, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     OCTGroupRejectType rejectType = OCTGroupRejectTypeUnknown;
     switch (failType) {
@@ -449,17 +469,16 @@ static void groupJoinFailCallback(Tox *tox, Tox_Group_Number groupNumber,
         default: rejectType = OCTGroupRejectTypeUnknown; break;
     }
 
-    [manager.delegate groupSubmanager:manager joinRejected:rejectType inGroup:groupNumber];
+    [sSharedManager.delegate groupSubmanager:sSharedManager joinRejected:rejectType inGroup:groupNumber];
 }
 
 static void groupCustomPacketCallback(Tox *tox, Tox_Group_Number groupNumber,
     Tox_Group_Peer_Number peerId, const uint8_t *data,
     size_t length, void *userData) {
-    OCTSubmanagerGroupImpl *manager = managerForTox(tox);
-    if (!manager || !manager.delegate) return;
+    if (!sSharedManager || !sSharedManager.delegate) return;
 
     NSData *dataNS = [NSData dataWithBytes:data length:length];
-    [manager.delegate groupSubmanager:manager customPacketReceived:dataNS fromPeer:peerId inGroup:groupNumber];
+    [sSharedManager.delegate groupSubmanager:sSharedManager customPacketReceived:dataNS fromPeer:peerId inGroup:groupNumber];
 }
 
 @end
