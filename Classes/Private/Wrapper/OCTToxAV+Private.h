@@ -28,7 +28,7 @@ extern bool (*_toxav_video_send_frame)(ToxAV *toxAV, uint32_t friend_number, uin
  * Callbacks
  */
 toxav_call_cb callIncomingCallback;
-toxav_call_state_cb callStateCallback;
+toxav_call_state_cb callStateCallback; // updated for ngc_merge: state param is uint32_t
 toxav_audio_bit_rate_cb audioBitRateStatusCallback;
 toxav_video_bit_rate_cb videoBitRateStatusCallback;
 toxav_audio_receive_frame_cb receiveAudioFrameCallback;
