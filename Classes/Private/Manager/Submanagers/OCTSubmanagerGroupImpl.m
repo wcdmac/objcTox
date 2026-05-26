@@ -1,381 +1,474 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-#import <Foundation/Foundation.h>
-#import "OCTSubmanagerGroupImpl.h"
-#import "OCTTox+Private.h"
+#import <objcTox/OCTSubmanagerGroupImpl.h>
+#import <objcTox/OCTTox+Private.h>
 #import <objcTox/OCTSubmanagerGroupDelegate.h>
 #import <objcTox/OCTGroupConstants.h>
 
-#define TOX_GROUP_CHAT_ID_SIZE 32
+#import <toxcore/tox.h>
 
-extern uint32_t tox_group_new(void *tox, int privacy, const uint8_t *name, size_t name_length, int *error);
-extern uint32_t tox_group_join(void *tox, const uint8_t *chat_id, const uint8_t *name, size_t name_length, const uint8_t *password, size_t password_length, int *error);
-extern bool tox_group_invite_friend(void *tox, uint32_t friend_number, uint32_t group_number, int *error);
-extern uint32_t tox_group_invite_accept(void *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length, const uint8_t *name, size_t name_length, const uint8_t *password, size_t password_length, int *error);
-extern uint32_t tox_group_send_message(void *tox, uint32_t group_number, int type, const uint8_t *message, size_t length, int *error);
-extern bool tox_group_send_custom_packet(void *tox, uint32_t group_number, bool lossless, const uint8_t *data, size_t length, int *error);
-extern bool tox_group_leave(void *tox, uint32_t group_number, const uint8_t *part_message, size_t length, int *error);
-extern bool tox_group_set_topic(void *tox, uint32_t group_number, const uint8_t *topic, size_t length, int *error);
-extern bool tox_group_kick_peer(void *tox, uint32_t group_number, uint32_t peer_id, int *error);
-extern bool tox_group_set_role(void *tox, uint32_t group_number, uint32_t peer_id, int role, int *error);
-extern bool tox_group_get_chat_id(void *tox, uint32_t group_number, uint8_t *chat_id, int *error);
-extern uint32_t tox_group_get_number_groups(const void *tox);
+typedef uint32_t Tox_Group_Number;
+typedef uint32_t Tox_Group_Peer_Number;
+typedef uint32_t Tox_Group_Message_Id;
 
-extern void tox_callback_group_invite(void *tox, void (*callback)(void *, uint32_t, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *user_data);
-extern void tox_callback_group_message(void *tox, void (*callback)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, uint32_t, void *), void *user_data);
-extern void tox_callback_group_private_message(void *tox, void (*callback)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, void *), void *user_data);
-extern void tox_callback_group_custom_packet(void *tox, void (*callback)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *user_data);
-extern void tox_callback_group_peer_join(void *tox, void (*callback)(void *, uint32_t, uint32_t, void *), void *user_data);
-extern void tox_callback_group_peer_exit(void *tox, void (*callback)(void *, uint32_t, uint32_t, int, const uint8_t *, size_t, const uint8_t *, size_t, void *), void *user_data);
-extern void tox_callback_group_topic(void *tox, void (*callback)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *user_data);
-extern void tox_callback_group_self_join(void *tox, void (*callback)(void *, uint32_t, void *), void *user_data);
-extern void tox_callback_group_join_rejected(void *tox, void (*callback)(void *, uint32_t, int, void *), void *user_data);
-extern void tox_callback_group_peer_name(void *tox, void (*callback)(void *, uint32_t, uint32_t, const uint8_t *, size_t, void *), void *user_data);
+typedef enum Tox_Group_Exit_Type {
+    TOX_GROUP_EXIT_TYPE_QUIT,
+    TOX_GROUP_EXIT_TYPE_TIMEOUT,
+    TOX_GROUP_EXIT_TYPE_DISCONNECTED,
+    TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED,
+} Tox_Group_Exit_Type;
 
-static void groupInviteCallback(void *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length, const uint8_t *group_name, size_t group_name_length, void *user_data);
-static void groupMessageCallback(void *tox, uint32_t group_number, uint32_t peer_number, int type, const uint8_t *message, size_t length, uint32_t message_id, void *user_data);
-static void groupPrivateMessageCallback(void *tox, uint32_t group_number, uint32_t peer_number, int type, const uint8_t *message, size_t length, void *user_data);
-static void groupCustomPacketCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *data, size_t length, void *user_data);
-static void groupPeerJoinCallback(void *tox, uint32_t group_number, uint32_t peer_number, void *user_data);
-static void groupPeerExitCallback(void *tox, uint32_t group_number, uint32_t peer_number, int exit_type, const uint8_t *name, size_t name_length, const uint8_t *part_message, size_t part_message_length, void *user_data);
-static void groupTopicCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *topic, size_t length, void *user_data);
-static void groupSelfJoinCallback(void *tox, uint32_t group_number, void *user_data);
-static void groupJoinRejectedCallback(void *tox, uint32_t group_number, int reject_type, void *user_data);
-static void groupPeerNameCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *name, size_t length, void *user_data);
+typedef enum Tox_Group_Join_Fail {
+    TOX_GROUP_JOIN_FAIL_PEER_LIMIT,
+    TOX_GROUP_JOIN_FAIL_INVALID_PASSWORD,
+    TOX_GROUP_JOIN_FAIL_UNKNOWN,
+} Tox_Group_Join_Fail;
 
-NSString *const OCTSubmanagerGroupErrorDomain = @"OCTSubmanagerGroupErrorDomain";
+@interface OCTSubmanagerGroupImpl ()
 
-@interface OCTSubmanagerGroupImpl () {
-    OCTTox *_tox;
-    id<OCTSubmanagerGroupDelegate> _delegate;
-    id _dataSource;
-}
+@property (nonatomic, weak, readwrite) OCTTox *tox;
+@property (nonatomic, assign, readwrite) id<OCTSubmanagerGroupDelegate> delegate;
+
 @end
 
 @implementation OCTSubmanagerGroupImpl
 
-- (instancetype)initWithTox:(OCTTox *)tox {
+- (instancetype)initWithTox:(OCTTox *)tox delegate:(id<OCTSubmanagerGroupDelegate>)delegate {
     self = [super init];
     if (self) {
         _tox = tox;
-        if (_tox == nil || _tox.tox == NULL) {
-            NSLog(@"OCTSubmanagerGroupImpl: tox is nil or tox.tox is NULL, group features disabled");
-            return self;
-        }
-        [self registerCallbacks];
+        _delegate = delegate;
+        [self setupCallbacks];
     }
     return self;
 }
 
-- (id<OCTSubmanagerGroupDelegate>)delegate {
-    return _delegate;
-}
-
-- (void)setDelegate:(id<OCTSubmanagerGroupDelegate>)delegate {
-    _delegate = delegate;
-}
-
-- (id)dataSource {
-    return _dataSource;
-}
-
-- (void)setDataSource:(id)dataSource {
-    _dataSource = dataSource;
-}
-
-- (void)registerCallbacks {
-    void *tox = _tox.tox;
+- (void)setupCallbacks {
+    Tox *tox = (Tox *)self.tox.tox;
     if (!tox) return;
 
-    tox_callback_group_invite(tox, groupInviteCallback, (__bridge void *)self);
-    tox_callback_group_message(tox, groupMessageCallback, (__bridge void *)self);
-    tox_callback_group_private_message(tox, groupPrivateMessageCallback, (__bridge void *)self);
-    tox_callback_group_custom_packet(tox, groupCustomPacketCallback, (__bridge void *)self);
-    tox_callback_group_peer_join(tox, groupPeerJoinCallback, (__bridge void *)self);
-    tox_callback_group_peer_exit(tox, groupPeerExitCallback, (__bridge void *)self);
-    tox_callback_group_topic(tox, groupTopicCallback, (__bridge void *)self);
-    tox_callback_group_self_join(tox, groupSelfJoinCallback, (__bridge void *)self);
-    tox_callback_group_join_rejected(tox, groupJoinRejectedCallback, (__bridge void *)self);
-    tox_callback_group_peer_name(tox, groupPeerNameCallback, (__bridge void *)self);
-
-    NSLog(@"OCTSubmanagerGroupImpl: all group callbacks registered");
+    tox_callback_group_invite(tox, groupInviteCallback);
+    tox_callback_group_message(tox, groupMessageCallback);
+    tox_callback_group_private_message(tox, groupPrivateMessageCallback);
+    tox_callback_group_peer_name(tox, groupPeerNameCallback);
+    tox_callback_group_peer_join(tox, groupPeerJoinCallback);
+    tox_callback_group_peer_exit(tox, groupPeerExitCallback);
+    tox_callback_group_topic(tox, groupTopicCallback);
+    tox_callback_group_self_join(tox, groupSelfJoinCallback);
+    tox_callback_group_join_fail(tox, groupJoinFailCallback);
+    tox_callback_group_custom_packet(tox, groupCustomPacketCallback);
 }
 
 - (OCTGroupNumber)createGroupWithName:(NSString *)name privacyState:(OCTGroupPrivacyState)privacyState error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupNew userInfo:nil]; return UINT32_MAX; }
-    int err = 0;
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupNew userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    Tox_Err_Group_New err = TOX_ERR_GROUP_NEW_OK;
     const char *nameC = name ? [name UTF8String] : "";
-    uint32_t result = tox_group_new(tox, (int)privacyState, (const uint8_t *)nameC, strlen(nameC), &err);
-    if (err != 0 && error) {
+    size_t nameLen = strlen(nameC);
+
+    NSString *selfName = self.tox.userName;
+    const char *selfNameC = selfName ? [selfName UTF8String] : "";
+    size_t selfNameLen = strlen(selfNameC);
+
+    Tox_Group_Privacy_State privacy = (privacyState == OCTGroupPrivacyStatePrivate) ?
+        TOX_GROUP_PRIVACY_STATE_PRIVATE : TOX_GROUP_PRIVACY_STATE_PUBLIC;
+
+    Tox_Group_Number result = tox_group_new(tox, privacy,
+        (const uint8_t *)nameC, nameLen,
+        (const uint8_t *)selfNameC, selfNameLen,
+        &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: createGroupWithName result=%u err=%d", result, err);
+
+    if (err != TOX_ERR_GROUP_NEW_OK && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupNew userInfo:nil];
     }
-    NSLog(@"OCTSubmanagerGroupImpl: createGroupWithName result=%u err=%d", result, err);
+
     return result;
 }
 
 - (OCTGroupNumber)joinGroupWithChatId:(NSData *)chatId name:(NSString *)name password:(NSString *)password error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupJoin userInfo:nil]; return UINT32_MAX; }
-    int err = 0;
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupJoin userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    if (!chatId || chatId.length != TOX_GROUP_CHAT_ID_SIZE) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupJoin userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    Tox_Err_Group_Join err = TOX_ERR_GROUP_JOIN_OK;
     const char *nameC = name ? [name UTF8String] : "";
-    const char *passC = password ? [password UTF8String] : "";
-    uint32_t result = tox_group_join(tox, [chatId bytes], (const uint8_t *)nameC, strlen(nameC), (const uint8_t *)passC, strlen(passC), &err);
-    if (err != 0 && error) {
+    size_t nameLen = strlen(nameC);
+    const char *pwC = password ? [password UTF8String] : NULL;
+    size_t pwLen = pwC ? strlen(pwC) : 0;
+
+    Tox_Group_Number result = tox_group_join(tox,
+        (const uint8_t *)chatId.bytes,
+        (const uint8_t *)nameC, nameLen,
+        (const uint8_t *)pwC, pwLen,
+        &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: joinGroupWithChatId result=%u err=%d", result, err);
+
+    if (err != TOX_ERR_GROUP_JOIN_OK && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupJoin userInfo:nil];
     }
-    NSLog(@"OCTSubmanagerGroupImpl: joinGroupWithChatId result=%u err=%d", result, err);
+
     return result;
 }
 
 - (BOOL)inviteFriend:(OCTFriendNumber)friendNumber toGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteFriend userInfo:nil]; return NO; }
-    int err = 0;
-    bool result = tox_group_invite_friend(tox, (uint32_t)friendNumber, groupNumber, &err);
-    if (err != 0 && error) {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteFriend userInfo:nil];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Invite_Friend err = TOX_ERR_GROUP_INVITE_FRIEND_OK;
+    bool result = tox_group_invite_friend(tox, groupNumber, friendNumber, &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: inviteFriend result=%d err=%d", result, err);
+
+    if (!result && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteFriend userInfo:nil];
     }
-    return result;
+
+    return result ? YES : NO;
 }
 
-- (OCTGroupNumber)acceptInviteWithData:(NSData *)inviteData name:(NSString *)name password:(NSString *)password error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil]; return UINT32_MAX; }
-    int err = 0;
+- (OCTGroupNumber)acceptInviteWithFriendNumber:(OCTFriendNumber)friendNumber inviteData:(NSData *)inviteData name:(NSString *)name error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    if (!inviteData) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    Tox_Err_Group_Invite_Accept err = TOX_ERR_GROUP_INVITE_ACCEPT_OK;
     const char *nameC = name ? [name UTF8String] : "";
-    const char *passC = password ? [password UTF8String] : "";
-    uint32_t result = tox_group_invite_accept(tox, 0, [inviteData bytes], [inviteData length], (const uint8_t *)nameC, strlen(nameC), (const uint8_t *)passC, strlen(passC), &err);
-    if (err != 0 && error) {
+    size_t nameLen = strlen(nameC);
+
+    Tox_Group_Number result = tox_group_invite_accept(tox, friendNumber,
+        (const uint8_t *)inviteData.bytes, inviteData.length,
+        (const uint8_t *)nameC, nameLen,
+        NULL, 0,
+        &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: acceptInvite result=%u err=%d", result, err);
+
+    if (err != TOX_ERR_GROUP_INVITE_ACCEPT_OK && error) {
         *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorInviteAccept userInfo:nil];
     }
+
     return result;
 }
 
-- (uint32_t)sendMessage:(NSData *)message toGroup:(OCTGroupNumber)groupNumber type:(OCTToxMessageType)type error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendMessage userInfo:nil]; return 0; }
-    int err = 0;
-    uint32_t result = tox_group_send_message(tox, groupNumber, (int)type, [message bytes], [message length], &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendMessage userInfo:nil];
+- (BOOL)leaveGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupLeave userInfo:nil];
+        }
+        return NO;
     }
-    return result;
-}
 
-- (BOOL)sendCustomPacket:(NSData *)packet toGroup:(OCTGroupNumber)groupNumber lossless:(BOOL)lossless error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendCustomPacket userInfo:nil]; return NO; }
-    int err = 0;
-    bool result = tox_group_send_custom_packet(tox, groupNumber, lossless, [packet bytes], [packet length], &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSendCustomPacket userInfo:nil];
+    Tox_Err_Group_Leave err = TOX_ERR_GROUP_LEAVE_OK;
+    bool result = tox_group_leave(tox, groupNumber, NULL, 0, &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: leaveGroup result=%d err=%d", result, err);
+
+    if (!result && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupLeave userInfo:nil];
     }
-    return result;
+
+    return result ? YES : NO;
 }
 
-- (BOOL)leaveGroup:(OCTGroupNumber)groupNumber withMessage:(NSString *)message error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorLeave userInfo:nil]; return NO; }
-    int err = 0;
-    const char *msgC = message ? [message UTF8String] : "";
-    bool result = tox_group_leave(tox, groupNumber, (const uint8_t *)msgC, strlen(msgC), &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorLeave userInfo:nil];
+- (BOOL)changeGroup:(OCTGroupNumber)groupNumber topic:(NSString *)topic error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupTopicSet userInfo:nil];
+        }
+        return NO;
     }
-    return result;
-}
 
-- (BOOL)setTopic:(NSString *)topic forGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetTopic userInfo:nil]; return NO; }
-    int err = 0;
+    Tox_Err_Group_Topic_Set err = TOX_ERR_GROUP_TOPIC_SET_OK;
     const char *topicC = topic ? [topic UTF8String] : "";
-    bool result = tox_group_set_topic(tox, groupNumber, (const uint8_t *)topicC, strlen(topicC), &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetTopic userInfo:nil];
+    size_t topicLen = strlen(topicC);
+
+    bool result = tox_group_set_topic(tox, groupNumber, (const uint8_t *)topicC, topicLen, &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: changeGroupTopic result=%d err=%d", result, err);
+
+    if (!result && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupTopicSet userInfo:nil];
     }
+
+    return result ? YES : NO;
+}
+
+- (OCTGroupMessageId)sendMessageToGroup:(OCTGroupNumber)groupNumber message:(NSString *)message type:(OCTGroupMessageType)type error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSendMessage userInfo:nil];
+        }
+        return UINT32_MAX;
+    }
+
+    Tox_Err_Group_Send_Message err = TOX_ERR_GROUP_SEND_MESSAGE_OK;
+    const char *msgC = message ? [message UTF8String] : "";
+    size_t msgLen = strlen(msgC);
+
+    Tox_Message_Type msgType = (type == OCTGroupMessageTypeAction) ? TOX_MESSAGE_TYPE_ACTION : TOX_MESSAGE_TYPE_NORMAL;
+
+    Tox_Group_Message_Id result = tox_group_send_message(tox, groupNumber, msgType, (const uint8_t *)msgC, msgLen, &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: sendMessageToGroup result=%u err=%d", result, err);
+
+    if (err != TOX_ERR_GROUP_SEND_MESSAGE_OK && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSendMessage userInfo:nil];
+    }
+
     return result;
 }
 
-- (BOOL)kickPeer:(OCTGroupPeerNumber)peerNumber fromGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorKickPeer userInfo:nil]; return NO; }
-    int err = 0;
-    bool result = tox_group_kick_peer(tox, groupNumber, peerNumber, &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorKickPeer userInfo:nil];
+- (BOOL)sendCustomPacketToGroup:(OCTGroupNumber)groupNumber lossless:(BOOL)lossless data:(NSData *)data error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSendCustomPacket userInfo:nil];
+        }
+        return NO;
     }
-    return result;
+
+    if (!data) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSendCustomPacket userInfo:nil];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Send_Custom_Packet err = TOX_ERR_GROUP_SEND_CUSTOM_PACKET_OK;
+    bool result = tox_group_send_custom_packet(tox, groupNumber, lossless, (const uint8_t *)data.bytes, data.length, &err);
+
+    NSLog(@"OCTSubmanagerGroupImpl: sendCustomPacket result=%d err=%d", result, err);
+
+    if (!result && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSendCustomPacket userInfo:nil];
+    }
+
+    return result ? YES : NO;
 }
 
-- (BOOL)setRole:(OCTGroupRole)role forPeer:(OCTGroupPeerNumber)peerNumber inGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetRole userInfo:nil]; return NO; }
-    int err = 0;
-    bool result = tox_group_set_role(tox, groupNumber, peerNumber, (int)role, &err);
-    if (err != 0 && error) {
-        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorSetRole userInfo:nil];
-    }
-    return result;
-}
-
-- (NSData *)getChatIdForGroup:(OCTGroupNumber)groupNumber error:(NSError **)error {
-    void *tox = _tox.tox;
-    if (!tox) { if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGetChatId userInfo:nil]; return nil; }
-    int err = 0;
-    uint8_t chatId[TOX_GROUP_CHAT_ID_SIZE];
-    bool result = tox_group_get_chat_id(tox, groupNumber, chatId, &err);
-    if (!result || err != 0) {
-        if (error) *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGetChatId userInfo:nil];
+- (NSData *)getGroupChatId:(OCTGroupNumber)groupNumber error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupGetChatId userInfo:nil];
+        }
         return nil;
     }
+
+    uint8_t chatId[TOX_GROUP_CHAT_ID_SIZE];
+    Tox_Err_Group_State_Query err = TOX_ERR_GROUP_STATE_QUERY_OK;
+    bool result = tox_group_get_chat_id(tox, groupNumber, chatId, &err);
+
+    if (!result) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupGetChatId userInfo:nil];
+        }
+        return nil;
+    }
+
     return [NSData dataWithBytes:chatId length:TOX_GROUP_CHAT_ID_SIZE];
 }
 
-- (uint32_t)getGroupNumberGroups {
-    void *tox = _tox.tox;
+- (NSUInteger)getNumberGroups {
+    Tox *tox = (Tox *)self.tox.tox;
     if (!tox) return 0;
     return tox_group_get_number_groups(tox);
 }
 
+- (BOOL)kickPeerFromGroup:(OCTGroupNumber)groupNumber peerId:(OCTGroupPeerNumber)peerId error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupKickPeer userInfo:nil];
+        }
+        return NO;
+    }
+
+    Tox_Err_Group_Kick_Peer err = TOX_ERR_GROUP_KICK_PEER_OK;
+    bool result = tox_group_kick_peer(tox, groupNumber, peerId, &err);
+
+    if (!result && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupKickPeer userInfo:nil];
+    }
+
+    return result ? YES : NO;
+}
+
+- (BOOL)setPeerRoleInGroup:(OCTGroupNumber)groupNumber peerId:(OCTGroupPeerNumber)peerId role:(OCTGroupRole)role error:(NSError **)error {
+    Tox *tox = (Tox *)self.tox.tox;
+    if (!tox) {
+        if (error) {
+            *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSetRole userInfo:nil];
+        }
+        return NO;
+    }
+
+    Tox_Group_Role toxRole;
+    switch (role) {
+        case OCTGroupRoleFounder:   toxRole = TOX_GROUP_ROLE_FOUNDER; break;
+        case OCTGroupRoleModerator: toxRole = TOX_GROUP_ROLE_MODERATOR; break;
+        case OCTGroupRoleUser:      toxRole = TOX_GROUP_ROLE_USER; break;
+        case OCTGroupRoleObserver:  toxRole = TOX_GROUP_ROLE_OBSERVER; break;
+        default:                    toxRole = TOX_GROUP_ROLE_USER; break;
+    }
+
+    Tox_Err_Group_Set_Role err = TOX_ERR_GROUP_SET_ROLE_OK;
+    bool result = tox_group_set_role(tox, groupNumber, peerId, toxRole, &err);
+
+    if (!result && error) {
+        *error = [NSError errorWithDomain:OCTSubmanagerGroupErrorDomain code:OCTSubmanagerGroupErrorGroupSetRole userInfo:nil];
+    }
+
+    return result ? YES : NO;
+}
+
+#pragma mark - Callbacks
+
+static void groupInviteCallback(Tox *tox, Tox_Friend_Number friendNumber,
+    const uint8_t *inviteData, size_t inviteDataLength,
+    const uint8_t *groupName, size_t groupNameLength,
+    void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSData *inviteDataNS = [NSData dataWithBytes:inviteData length:inviteDataLength];
+    NSString *groupNameNS = [[NSString alloc] initWithBytes:groupName length:groupNameLength encoding:NSUTF8StringEncoding];
+
+    [manager.delegate groupInviteReceivedFromFriend:friendNumber inviteData:inviteDataNS groupName:groupNameNS];
+}
+
+static void groupMessageCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, Tox_Message_Type type,
+    const uint8_t *message, size_t length,
+    Tox_Group_Message_Id messageId, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSString *messageNS = [[NSString alloc] initWithBytes:message length:length encoding:NSUTF8StringEncoding];
+    OCTGroupMessageType msgType = (type == TOX_MESSAGE_TYPE_ACTION) ? OCTGroupMessageTypeAction : OCTGroupMessageTypeNormal;
+
+    [manager.delegate groupMessageReceivedInGroup:groupNumber peerId:peerId message:messageNS type:msgType messageId:messageId];
+}
+
+static void groupPrivateMessageCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, Tox_Message_Type type,
+    const uint8_t *message, size_t length,
+    Tox_Group_Message_Id messageId, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSString *messageNS = [[NSString alloc] initWithBytes:message length:length encoding:NSUTF8StringEncoding];
+    OCTGroupMessageType msgType = (type == TOX_MESSAGE_TYPE_ACTION) ? OCTGroupMessageTypeAction : OCTGroupMessageTypeNormal;
+
+    [manager.delegate groupPrivateMessageReceivedInGroup:groupNumber peerId:peerId message:messageNS type:msgType messageId:messageId];
+}
+
+static void groupPeerNameCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, const uint8_t *name,
+    size_t nameLength, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSString *nameNS = [[NSString alloc] initWithBytes:name length:nameLength encoding:NSUTF8StringEncoding];
+    [manager.delegate groupPeerNameChangedInGroup:groupNumber peerId:peerId name:nameNS];
+}
+
+static void groupPeerJoinCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    [manager.delegate groupPeerJoinedGroup:groupNumber peerId:peerId];
+}
+
+static void groupPeerExitCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, Tox_Group_Exit_Type exitType,
+    const uint8_t *name, size_t nameLength,
+    const uint8_t *partMessage, size_t partMessageLength,
+    void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSString *nameNS = name ? [[NSString alloc] initWithBytes:name length:nameLength encoding:NSUTF8StringEncoding] : nil;
+    NSString *partMsg = partMessage ? [[NSString alloc] initWithBytes:partMessage length:partMessageLength encoding:NSUTF8StringEncoding] : nil;
+
+    [manager.delegate groupPeerLeftGroup:groupNumber peerId:peerId name:nameNS partMessage:partMsg];
+}
+
+static void groupTopicCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, const uint8_t *topic,
+    size_t topicLength, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSString *topicNS = [[NSString alloc] initWithBytes:topic length:topicLength encoding:NSUTF8StringEncoding];
+    [manager.delegate groupTopicChangedInGroup:groupNumber peerId:peerId topic:topicNS];
+}
+
+static void groupSelfJoinCallback(Tox *tox, Tox_Group_Number groupNumber, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    [manager.delegate groupSelfJoinedGroup:groupNumber];
+}
+
+static void groupJoinFailCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Join_Fail failType, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    [manager.delegate groupJoinFailedForGroup:groupNumber failType:(OCTGroupJoinFail)failType];
+}
+
+static void groupCustomPacketCallback(Tox *tox, Tox_Group_Number groupNumber,
+    Tox_Group_Peer_Number peerId, const uint8_t *data,
+    size_t length, void *userData) {
+    OCTSubmanagerGroupImpl *manager = [OCTSubmanagerGroupImpl managerForTox:tox];
+    if (!manager || !manager.delegate) return;
+
+    NSData *dataNS = [NSData dataWithBytes:data length:length];
+    [manager.delegate groupCustomPacketReceivedInGroup:groupNumber peerId:peerId data:dataNS];
+}
+
++ (OCTSubmanagerGroupImpl *)managerForTox:(void *)toxPtr {
+    return nil;
+}
+
 @end
-
-static void dispatchToMain(void (^block)(void)) {
-    if ([NSThread isMainThread]) {
-        block();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), block);
-    }
-}
-
-static void groupInviteCallback(void *tox, uint32_t friend_number, const uint8_t *invite_data, size_t length, const uint8_t *group_name, size_t group_name_length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSData *inviteData = [NSData dataWithBytes:invite_data length:length];
-        NSString *groupName = group_name_length > 0 ? [[NSString alloc] initWithBytes:group_name length:group_name_length encoding:NSUTF8StringEncoding] : @"";
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:inviteReceived:fromFriend:groupName:)]) {
-                [impl.delegate groupSubmanager:impl inviteReceived:inviteData fromFriend:friend_number groupName:groupName];
-            }
-        });
-    }
-}
-
-static void groupMessageCallback(void *tox, uint32_t group_number, uint32_t peer_number, int type, const uint8_t *message, size_t length, uint32_t message_id, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSData *messageData = [NSData dataWithBytes:message length:length];
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:messageReceived:fromPeer:inGroup:type:messageId:)]) {
-                [impl.delegate groupSubmanager:impl messageReceived:messageData fromPeer:peer_number inGroup:group_number type:type messageId:message_id];
-            }
-        });
-    }
-}
-
-static void groupPrivateMessageCallback(void *tox, uint32_t group_number, uint32_t peer_number, int type, const uint8_t *message, size_t length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSData *messageData = [NSData dataWithBytes:message length:length];
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:privateMessageReceived:fromPeer:inGroup:type:)]) {
-                [impl.delegate groupSubmanager:impl privateMessageReceived:messageData fromPeer:peer_number inGroup:group_number type:type];
-            }
-        });
-    }
-}
-
-static void groupCustomPacketCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *data, size_t length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSData *packetData = [NSData dataWithBytes:data length:length];
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:customPacketReceived:fromPeer:inGroup:)]) {
-                [impl.delegate groupSubmanager:impl customPacketReceived:packetData fromPeer:peer_number inGroup:group_number];
-            }
-        });
-    }
-}
-
-static void groupPeerJoinCallback(void *tox, uint32_t group_number, uint32_t peer_number, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:peerJoined:inGroup:)]) {
-                [impl.delegate groupSubmanager:impl peerJoined:peer_number inGroup:group_number];
-            }
-        });
-    }
-}
-
-static void groupPeerExitCallback(void *tox, uint32_t group_number, uint32_t peer_number, int exit_type, const uint8_t *name, size_t name_length, const uint8_t *part_message, size_t part_message_length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSString *peerName = name_length > 0 ? [[NSString alloc] initWithBytes:name length:name_length encoding:NSUTF8StringEncoding] : @"";
-        NSString *partMsg = part_message_length > 0 ? [[NSString alloc] initWithBytes:part_message length:part_message_length encoding:NSUTF8StringEncoding] : nil;
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:peerLeft:inGroup:exitType:name:partMessage:)]) {
-                [impl.delegate groupSubmanager:impl peerLeft:peer_number inGroup:group_number exitType:exit_type name:peerName partMessage:partMsg];
-            }
-        });
-    }
-}
-
-static void groupTopicCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *topic, size_t length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSString *topicStr = length > 0 ? [[NSString alloc] initWithBytes:topic length:length encoding:NSUTF8StringEncoding] : @"";
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:topicChanged:inGroup:byPeer:)]) {
-                [impl.delegate groupSubmanager:impl topicChanged:topicStr inGroup:group_number byPeer:peer_number];
-            }
-        });
-    }
-}
-
-static void groupSelfJoinCallback(void *tox, uint32_t group_number, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:selfJoinedGroup:)]) {
-                [impl.delegate groupSubmanager:impl selfJoinedGroup:group_number];
-            }
-        });
-    }
-}
-
-static void groupJoinRejectedCallback(void *tox, uint32_t group_number, int reject_type, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:joinRejected:inGroup:)]) {
-                [impl.delegate groupSubmanager:impl joinRejected:reject_type inGroup:group_number];
-            }
-        });
-    }
-}
-
-static void groupPeerNameCallback(void *tox, uint32_t group_number, uint32_t peer_number, const uint8_t *name, size_t length, void *user_data) {
-    @autoreleasepool {
-        OCTSubmanagerGroupImpl *impl = (__bridge OCTSubmanagerGroupImpl *)user_data;
-        if (!impl) return;
-        NSString *nameStr = length > 0 ? [[NSString alloc] initWithBytes:name length:length encoding:NSUTF8StringEncoding] : @"";
-        dispatchToMain(^{
-            if (impl.delegate && [impl.delegate respondsToSelector:@selector(groupSubmanager:peerNameChanged:inGroup:newName:)]) {
-                [impl.delegate groupSubmanager:impl peerNameChanged:peer_number inGroup:group_number newName:nameStr];
-            }
-        });
-    }
-}
